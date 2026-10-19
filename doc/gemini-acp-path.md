@@ -286,7 +286,7 @@ Summary, in rough order of tractability:
 | 1 | Add Antigravity as a first-class ACP provider | Open, `ready-for-dev`, unscheduled | [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624) |
 | 2 | Registry cannot express non-npm (binary) providers | **Closed as watch item** 2026-09-04; not in SDK 1.49.6 | [#4823](https://github.com/OpenHands/software-agent-sdk/issues/4823) |
 | 3 | Artifact size / image variant | Cited as a gating reason; figures appear stale | see §5.3 |
-| 4 | Proprietary binary — no source; redistribution question for an image | **Not filed** — see §5.5 | — |
+| 4 | Proprietary binary — no source; distribution question for an image | **Not filed** — see §5.5 | — |
 | 5 | Auth selection cannot tell `gemini-cli` and `antigravity-acp` apart | **Not filed** — see §5.4 | — |
 | 6 | `gemini-cli` auth precedence + stale pin | Fix written, **closed unmerged** 2026-09-15; pin still undone | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629), [PR #4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) |
 
@@ -373,10 +373,24 @@ This differs from the other ACP providers, which are npm packages with public so
 proprietary binary can be *consumed*, but it cannot be read, patched, vendored, or
 audited.
 
-It also matters if `antigravity-acp` ever became a *first-class built-in provider*: the
-agent-server image would download Google's proprietary binary and ship it inside an
-OpenHands image. That is redistribution of a proprietary artifact rather than an npm
-install, which raises a licensing question this document does not answer.
+It also matters if `antigravity-acp` ever became a *first-class built-in provider*, and
+the shape of that matters too — there are two, and they are not equivalent:
+
+- **Baked at image build time.** This is what the mechanism does today. The
+  `acp-providers` stage installs the npm payload into `/acp-node` and the result is
+  `COPY`ed into the published base image, deliberately as a shared layer reused across
+  builds. A binary provider added this way would **ship inside OpenHands' own image**.
+- **Fetched on demand at runtime.** The artifact is downloaded when needed rather than
+  baked in. This is the branch the gate language in §5.1 contemplates — *"an artifact
+  small enough to fetch on demand"* — and it is a different shape: OpenHands would ship
+  a URL and a fetch step, not the artifact.
+
+For the escape hatch in §4.2, neither applies: you obtain the binary, and OpenHands
+neither ships nor fetches it.
+
+Which of these a given artifact's terms permit is a question this document does not
+answer. The two branches put the artifact in different places, so it is worth naming
+both rather than collapsing them.
 
 Two related gaps, stated without interpretation:
 
@@ -438,8 +452,9 @@ and may help you interpret the agreement that applies to you.
 - Act as the gatekeeper for what the delegated agent does on your machine. Because it
   auto-approves permission requests, the ACP server's own permission model governs the
   actions taken.
-- Redistribute the ACP server binary. In the escape-hatch path you supply it; only a
-  packaged first-class provider would place it inside a distributed image.
+- Redistribute the ACP server binary. In the escape-hatch path you supply it. A packaged
+  first-class provider would either bake it into the image or fetch it at runtime —
+  see §5.5.
 
 ---
 
