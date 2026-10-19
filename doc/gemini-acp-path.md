@@ -138,6 +138,9 @@ arms, `_REGISTRY_ACP_PACKAGES` pin-parity, and the TypeScript
 **Verified 2026-10-19: `install_method` is not present in `openhands-sdk` 1.49.6.** The
 catalog is still npm-only. Any binary-distributed provider still needs bespoke work.
 
+Note the scope: this blocks *shipping* a provider, not *running* one. The `acp_command`
+escape hatch bypasses all five sites — see §4.4.
+
 ---
 
 ## 4. The proper solution: Antigravity's first-party ACP server
@@ -229,20 +232,97 @@ Worth reproducing before relying on edit-heavy workloads. Not yet filed as an is
 
 ---
 
-## 5. What is blocking the proper solution
+### 4.4 The escape hatch is not first-class support
 
-Pulling it together, in rough order of tractability:
+This distinction matters and is easy to lose: **being able to run something does not make
+it supported.**
+
+| | `acp_command` + `acp_server="custom"` | First-class provider |
+|---|---|---|
+| Who supplies the binary | you, by hand | the agent-server image |
+| Where it lives | wherever you put it | `/acp-node`, via the pinned install stage |
+| Version management | yours | pinned in `ACP_INSTALL_CATALOG` |
+| Secrets UI | none | provider entry in the frontend |
+| Model list / branding | none | registry entry + chip icon |
+| Usage analytics | unlabelled | grouped by provider |
+| Cloud | not available | opt-in via a provider allowlist |
+| Regression coverage | none | pin-parity + conformance tests |
+
+Concretely, first-class means the provider key resolves through
+`ACP_INSTALL_CATALOG` → `render_docker_install_plan()` → the `acp-providers` Dockerfile
+stage, which currently installs by `npm install --global $PACKAGES` and wraps each
+`binary_name` under `/opt/acp-wrappers`. There is no branch in that stage for "download a
+platform binary and unpack it." That is the gap.
+
+So the two things this document describes are genuinely different:
+
+- **§4.2 (the escape hatch)** — how *you* can use Antigravity today, on your own machine,
+  with your own credentials, with no upstream change.
+- **§5 (first-class support)** — how OpenHands would ship Antigravity to everyone,
+  including Cloud. This is what #4624 tracks, and it is gated.
+
+Documenting the escape hatch is not a substitute for the second. It is a workaround that
+happens to work, and it carries none of the guarantees above.
+
+---
+
+## 5. What is blocking first-class support
+
+### 5.0 The actual gate: a distribution OpenHands can consume
+
+The blocker is not "the code assumes npm" in the abstract. It is a specific, written
+gating criterion. [OpenHands/enterprise#235](https://github.com/OpenHands/enterprise/issues/235)
+(*"Support Antigravity CLI (agy) ACP Provider and Update Gemini Branding"*) carries this
+notice, added **2026-09-04**:
+
+> **On hold — not planned.**
+>
+> **Gate: a distribution we can consume — an npm or otherwise thin install path, or an
+> artifact small enough to fetch on demand.** Today it is a 650.4 MiB download unpacking
+> to ~1.9 GiB, shipped as a platform binary rather than npm.
+
+That is the cleanest statement of the blocker anywhere, and it is a disjunction — **any
+one** of three things unblocks it:
+
+1. an npm (or otherwise thin) install path,
+2. an artifact small enough to fetch on demand, or
+3. the npm assumption being lifted so a platform binary can be installed deliberately.
+
+So "npm" is shorthand. The real requirement is *a distribution the agent-server image can
+consume*, and size is an equally load-bearing half of it. §5.2 is therefore not a side
+note — it speaks directly to criterion 2.
+
+The same issue records two things worth knowing:
+
+- **Antigravity would not appear in Cloud even once registered upstream.**
+  OpenHands/enterprise#315 gives Cloud an explicit provider allowlist, so enabling a
+  harness there is a separate, deliberate decision. Registering the provider in the SDK is
+  necessary but not sufficient for Cloud availability.
+- **The "Gemini CLI was sunset" premise is wrong.** `@google/gemini-cli` is at 0.58.0
+  (published 2026-09-01), not deprecated on npm, and still supports `--acp`. Only the
+  *consumer* auth tiers stopped. No deployed OpenHands path was affected, because Cloud
+  authenticates via `vertex-ai`. The "Update Gemini Branding" half of that issue is marked
+  for dropping rather than implementing.
+
+That last point is a useful corrective to a lot of the surrounding discussion: the
+Gemini CLI was not sunset, and the provider is not going away. The consumer *login* is what
+died — which is precisely the case §5.4 is about.
+
+**Upstream scope is additive.** #4624 adds Antigravity *alongside* `gemini-cli`; the
+`gemini-cli` key is never removed or renamed.
+
+Pulling the rest together, in rough order of tractability:
 
 | # | Blocker | Status | Link |
 |---|---|---|---|
 | 1 | Add Antigravity as a first-class ACP provider | Open, **reopened and rescoped**, `ready-for-dev`, unscheduled | [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624) |
-| 2 | Auth selection cannot tell `gemini-cli` and `antigravity-acp` apart | **Not filed** — see §5.4 | — |
-| 3 | Registry cannot express non-npm (binary) providers | **Closed as watch item** 2026-09-04; not in SDK 1.49.6 | [#4823](https://github.com/OpenHands/software-agent-sdk/issues/4823) |
-| 4 | Artifact size / image variant | Cited as a gating reason; figures appear stale | see §5.2 |
+| 2 | Registry cannot express non-npm (binary) providers | **Closed as watch item** 2026-09-04; not in SDK 1.49.6 | [#4823](https://github.com/OpenHands/software-agent-sdk/issues/4823) |
+| 3 | Artifact size / image variant | Cited as a gating reason; figures appear stale | see §5.2 |
+| 4 | Auth selection cannot tell `gemini-cli` and `antigravity-acp` apart | **Not filed** — see §5.4 | — |
 | 5 | `gemini-cli` auth precedence + stale pin | Fix written, **closed unmerged** 2026-09-15; pin still undone | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629), [PR #4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) |
 
-Blockers 1–4 affect the Antigravity path. Blocker 5 affects `gemini-cli` — and, as §5.4
-explains, fixing it the obvious way would work *against* blocker 1's goal.
+Items 1–4 gate the Antigravity path. Item 5 affects `gemini-cli` — and, as §5.4 explains,
+fixing it the obvious way would work *against* item 1's goal.
 
 ### 5.1 Issue #4624 — the Antigravity provider
 
@@ -343,15 +423,18 @@ If you want the proper integration:
 1. **Say so on [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624).**
    The close rationale was explicitly "without demand." A comment describing your
    subscription-backed use case is the single highest-leverage action.
-2. **Raise the auth-precedence collision (§5.4).** Ask that the ranking be made
+2. **Attack the distribution gate directly (enterprise#235, §5.0).** The gate is a
+   disjunction, so the cheapest win is the one you can actually evidence: a per-platform
+   size measurement. If ~394 MiB unpacked holds, criterion 2 ("small enough to fetch on
+   demand") is much closer to satisfied than the 650 MiB / ~1.9 GiB figures suggest. This
+   is concrete, checkable, and does not require anyone to design anything.
+3. **Raise the auth-precedence collision (§5.4).** Ask that the ranking be made
    provider-aware rather than globally ordered, so a subscription-backed Antigravity
    session does not get silently moved onto billed API usage once `GEMINI_API_KEY` is in
-   the environment. This is unfiled, concrete, and directly affects the personal-account
-   case.
-3. **Correct or confirm the size figures in #4624** with a per-platform measurement.
-   If ~394 MiB is representative, say so; if 650 MiB is, say that.
+   the environment. This is unfiled, and it directly affects the personal-account case.
 4. **Meanwhile, use the escape hatch** (§4.2) or this repository's
-   [`oh-gemini-tool`](../README.md). Neither requires an SDK change.
+   [`oh-gemini-tool`](../README.md). Neither requires an SDK change — but note §4.4: this
+   is a workaround, not first-class support, and it is not a substitute for items 1–3.
 
 > **On PR [#4646](https://github.com/OpenHands/software-agent-sdk/pull/4646):** it is a
 > legitimate fix for `gemini-cli` on the deployed path, and it closed for lack of review
@@ -385,3 +468,6 @@ Everything version-sensitive in this document was checked on the date shown.
 | 2026-10-19 | OpenHands driving it via `acp_command` | worked, no SDK change |
 | 2026-10-19 | `_select_auth_method` against Antigravity's method list | with `GEMINI_API_KEY` set, #4646's ranking picks `gemini-api-key` over `oauth-personal` (§5.4) |
 | 2026-10-19 | Main branch re-checked for #4629 | bug still live at `acp_agent.py:386`; fix branch deleted; no replacement PR |
+| 2026-10-19 | Dockerfile `acp-providers` stage on main | installs via `npm install --global`; no branch for platform binaries |
+| 2026-10-19 | `install_method` on main | absent — #4823's proposal never landed |
+| 2026-10-19 | enterprise#235 gate notice | "npm or otherwise thin install path, or an artifact small enough to fetch on demand" |
