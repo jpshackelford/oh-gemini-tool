@@ -124,16 +124,20 @@ Resuming replays the session, so it is slower and costs more input tokens. That 
 ### 4.2 Why not wrap the ACP server
 
 The ACP server is the better *integration* — streaming, tool calls, session state, and
-OpenHands as the primary agent. It is blocked only on artifact size. Two ways in, neither
-free:
+OpenHands as the primary agent. It is currently blocked upstream from being a built-in
+provider, not from working at all:
 
-1. `acp_server="custom"` with an explicit `acp_command` — the SDK supports this today;
-   you supply the 650 MiB binary yourself.
+1. `acp_server="custom"` with an explicit `acp_command` — the SDK supports this today,
+   and it **works with Google's first-party Antigravity ACP server on a personal
+   subscription**. This is the recommended path if you want the proper integration now.
 2. Wait for the upstream provider work to land a first-class entry.
 
-For a personal workflow, a small tool beats a 650 MiB sidecar. For a product, the ACP
-route is the right shape — and the thing to raise with Google is a thinner client, an
-`agy --acp` mode, or a documented standalone headless mode.
+For a personal workflow, a small tool beats a large sidecar. For a product, the ACP
+route is the right shape.
+
+See **[`gemini-acp-path.md`](gemini-acp-path.md)** for the full picture: what OpenHands
+supports today, the bugs blocking the built-in provider, the artifact-size measurements,
+and the specific issues and PRs to support.
 
 ## 5. Terms and Eligibility
 

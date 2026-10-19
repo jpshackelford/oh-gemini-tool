@@ -17,12 +17,20 @@ subscription:
 - **`gemini-cli` over ACP** works, but Google retired consumer-tier OAuth on
   2026-06-18, so an individual account must use a billed API key.
 - **Antigravity as a built-in ACP provider** is deferred upstream. The first-party ACP
-  server is a ~650 MiB download with no npm fallback, which does not fit the ACP
+  server is a large download with no npm fallback, which does not fit the ACP
   startup budget.
 
 `agy` itself, however, is already installed, already authenticated, and runs on the
 subscription. It just has no `--acp` mode. This tool drives it headlessly instead,
 which sidesteps the ACP packaging problem entirely.
+
+> **This tool is a workaround, not the ideal integration.** ACP is the better answer —
+> it keeps OpenHands as the primary agent and exposes streaming, typed tool calls, and
+> permission gating. **A first-party Antigravity ACP server exists and already works
+> with the SDK's `acp_command` escape hatch on a personal subscription.** See
+> **[`doc/gemini-acp-path.md`](doc/gemini-acp-path.md)** for what OpenHands supports
+> today, the bugs blocking the built-in provider (with issue/PR links and dates), and
+> how to help get it landed.
 
 > **Scope note.** This is a personal/experimental integration. It drives Google's own
 > CLI with your own credentials. Check that this matches your intended use of the
@@ -167,8 +175,13 @@ GeminiDelegateExecutor ──► agy -p "<task>" --output-format json [--convers
 GeminiDelegateObservation  ◄── JSON envelope: status, response, usage, conversation_id
 ```
 
-See [`doc/gemini-tool.md`](doc/gemini-tool.md) for the longer design write-up, including
-why the ACP route was deferred and the trade-offs of this approach.
+See [`doc/gemini-tool.md`](doc/gemini-tool.md) for the design write-up, including the
+trade-offs of this approach.
+
+See [`doc/gemini-acp-path.md`](doc/gemini-acp-path.md) for **the better integration**:
+what ACP support OpenHands has today, its limitations for personal subscriptions, the
+first-party Antigravity ACP server (which already works via `acp_command`), and the
+specific issues and PRs blocking a built-in provider — with dates.
 
 ## Development
 
