@@ -27,7 +27,7 @@ dependencies = []
 # The OpenHands agent tool integration (`oh_gemini_tool.tool`). openhands-sdk
 # requires Python >=3.12, so this extra is only installable there.
 openhands = [
-    "openhands-sdk~=1.49.0",
+    "openhands-sdk>=1.49,<1.56",
     "pydantic>=2.0.0",
     "rich>=13.0.0",
 ]
