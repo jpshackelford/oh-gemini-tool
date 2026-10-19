@@ -106,11 +106,21 @@ by the original reporter. It was **closed unmerged on 2026-09-15** with the comm
 
 So the fix exists, is small, and is sitting on the floor for want of review.
 
+> **This fix is not the answer to the Antigravity problem (§5.1).** It is a *different*
+> issue in the same area, and it points the opposite way: it makes a working API key
+> outrank `oauth-personal`, which is right for `gemini-cli` (whose consumer login is
+> dead) but would move a subscription-backed Antigravity session onto **billed** API
+> usage. See §5.4.
+
 ### 3.3 The `gemini-cli` pin is stale — same issue
 
 `GEMINI_CLI_VERSION = "0.46.0"`. The pin has not tracked upstream. This is the second
 half of #4629. A stale pin compounds the auth problem, because the auth-method
 negotiation is exactly the surface that changed.
+
+Note that PR #4646 deliberately left this half undone — its own description says the
+bump "is a separate change and was left as a follow-up." So even if that PR were revived
+and merged, #4629 would not be fully closed.
 
 ### 3.4 The provider mechanism assumes npm — issue #4823, closed
 
@@ -225,11 +235,14 @@ Pulling it together, in rough order of tractability:
 
 | # | Blocker | Status | Link |
 |---|---|---|---|
-| 1 | Auth precedence: retired `oauth-personal` outranks `GEMINI_API_KEY` | Fix written, **closed unmerged** 2026-09-15 | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629), [PR #4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) |
-| 2 | `gemini-cli` pin stale at `0.46.0` | Open, part of #4629 | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629) |
-| 3 | Add Antigravity as a first-class ACP provider | Open, **reopened and rescoped**, `ready-for-dev`, unscheduled | [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624) |
-| 4 | Registry cannot express non-npm (binary) providers | **Closed as watch item** 2026-09-04; not in SDK 1.49.6 | [#4823](https://github.com/OpenHands/software-agent-sdk/issues/4823) |
-| 5 | Artifact size / image variant | Cited as a gating reason | see below |
+| 1 | Add Antigravity as a first-class ACP provider | Open, **reopened and rescoped**, `ready-for-dev`, unscheduled | [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624) |
+| 2 | Auth selection cannot tell `gemini-cli` and `antigravity-acp` apart | **Not filed** — see §5.4 | — |
+| 3 | Registry cannot express non-npm (binary) providers | **Closed as watch item** 2026-09-04; not in SDK 1.49.6 | [#4823](https://github.com/OpenHands/software-agent-sdk/issues/4823) |
+| 4 | Artifact size / image variant | Cited as a gating reason; figures appear stale | see §5.2 |
+| 5 | `gemini-cli` auth precedence + stale pin | Fix written, **closed unmerged** 2026-09-15; pin still undone | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629), [PR #4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) |
+
+Blockers 1–4 affect the Antigravity path. Blocker 5 affects `gemini-cli` — and, as §5.4
+explains, fixing it the obvious way would work *against* blocker 1's goal.
 
 ### 5.1 Issue #4624 — the Antigravity provider
 
@@ -241,6 +254,10 @@ first-party server had been in the ACP registry five days before the close. It c
 the 2026-09-04 notice reads *"Neither is justified without demand."*
 
 That last clause is the actionable part: this is a demand problem, not a technical one.
+
+One thing #4624 does not yet cover: adding the provider surfaces an auth-selection
+collision, because `antigravity-acp` and `gemini-cli` advertise the same `oauth-personal`
+method id with opposite meanings. See §5.4.
 
 ### 5.2 The artifact-size argument
 
@@ -274,6 +291,49 @@ Even with size settled, #4823's closure means adding a binary-distributed provid
 the npm assumption unpicked in five places, or the provider has to be special-cased. That
 is the real engineering cost behind #4624 — not the download.
 
+### 5.4 Two servers, one auth-method id, opposite meanings
+
+This is a design gap that #4624 will run into, and it is not yet filed anywhere.
+
+Both servers advertise an auth method with the **same id, `oauth-personal`** — but with
+opposite status:
+
+| Server | `oauth-personal` | Correct precedence |
+|---|---|---|
+| `gemini-cli` | **retired** for consumers on 2026-06-18 | `GEMINI_API_KEY` should win |
+| `antigravity-acp` | **works**, and is the point of #4624 | `oauth-personal` should win |
+
+`_select_auth_method()` cannot distinguish them. It takes only the advertised method list
+and the environment, and returns a method id from a flat global ranking — it never sees
+which provider it is selecting for. The caller does have the provider available
+(`detect_acp_provider_by_agent_name(agent_name)` is called a few lines later at the
+`gemini-api-key` branch), so the information exists; it just is not threaded into the
+ranking.
+
+**Measured 2026-10-19** against the method list the Antigravity server actually returns:
+
+```
+~/.gemini/oauth_creds.json exists: True
+
+=== ANTIGRAVITY ACP server ===
+  no key   main=oauth-personal   if-#4646=oauth-personal
+  key set  main=oauth-personal   if-#4646=gemini-api-key     <-- CHANGES
+```
+
+So on a host where `GEMINI_API_KEY` is set, merging #4646 as written would flip an
+Antigravity session from the subscription (`oauth-personal`) to **billed** API usage. For
+a personal subscriber, that is the exact outcome this document exists to avoid.
+
+This is not an argument that #4646 is wrong. In a server image there is no
+`oauth_creds.json`, so the API-key path is the only one available and the fix is correct
+there. The point is narrower and worth making in #4624: **a blanket global ranking is the
+wrong shape once a second Google provider exists.** The ranking should be provider-aware
+— prefer the API key for `gemini-cli`, prefer `oauth-personal` for `antigravity-acp`.
+
+If Antigravity is added as a built-in provider without addressing this, subscription users
+with a `GEMINI_API_KEY` in their environment will silently land on billed usage, and the
+symptom will look like a mystery charge rather than an auth-precedence bug.
+
 ---
 
 ## 6. How to help
@@ -283,13 +343,22 @@ If you want the proper integration:
 1. **Say so on [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624).**
    The close rationale was explicitly "without demand." A comment describing your
    subscription-backed use case is the single highest-leverage action.
-2. **Ask for [#4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) to be
-   reopened or resubmitted.** It is +86/-6, already written, and fixes a real bug on the
-   deployed path. It closed for lack of review traction, not for a technical objection.
+2. **Raise the auth-precedence collision (§5.4).** Ask that the ranking be made
+   provider-aware rather than globally ordered, so a subscription-backed Antigravity
+   session does not get silently moved onto billed API usage once `GEMINI_API_KEY` is in
+   the environment. This is unfiled, concrete, and directly affects the personal-account
+   case.
 3. **Correct or confirm the size figures in #4624** with a per-platform measurement.
    If ~394 MiB is representative, say so; if 650 MiB is, say that.
 4. **Meanwhile, use the escape hatch** (§4.2) or this repository's
    [`oh-gemini-tool`](../README.md). Neither requires an SDK change.
+
+> **On PR [#4646](https://github.com/OpenHands/software-agent-sdk/pull/4646):** it is a
+> legitimate fix for `gemini-cli` on the deployed path, and it closed for lack of review
+> rather than on a technical objection. But it is **not** the answer to #4624, and for a
+> personal subscriber it currently points the wrong way — it would prefer a billed API
+> key over a working subscription login. Support it only together with the provider-aware
+> ranking in item 2 above, not on its own.
 
 ---
 
@@ -302,7 +371,7 @@ Everything version-sensitive in this document was checked on the date shown.
 | 2026-06-18 | Google retires consumer-tier OAuth for Gemini CLI | individual accounts need a billed API key |
 | 2026-08-24 | #4624 filed (Antigravity as ACP provider) | later closed, then reopened and rescoped |
 | 2026-08-25 | #4629 filed (auth precedence + stale pin) | open, `ready-for-dev` |
-| 2026-08-26 | PR #4646 opened | fix for #4629 |
+| 2026-08-26 | PR #4646 opened | fix for the `gemini-cli` half of #4629 |
 | 2026-09-02 | #4823 filed (`install_method`) | — |
 | 2026-09-04 | #4823 closed as watch item; #4624 notice | "no scheduled consumer"; "without demand" |
 | 2026-09-15 | PR #4646 closed unmerged | "open a while without traction" |
@@ -314,3 +383,5 @@ Everything version-sensitive in this document was checked on the date shown.
 | 2026-10-19 | Server `initialize` auth methods | includes `oauth-personal` |
 | 2026-10-19 | End-to-end on personal subscription | file created, `gemini-3.8-flash-high` |
 | 2026-10-19 | OpenHands driving it via `acp_command` | worked, no SDK change |
+| 2026-10-19 | `_select_auth_method` against Antigravity's method list | with `GEMINI_API_KEY` set, #4646's ranking picks `gemini-api-key` over `oauth-personal` (§5.4) |
+| 2026-10-19 | Main branch re-checked for #4629 | bug still live at `acp_agent.py:386`; fix branch deleted; no replacement PR |
