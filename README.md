@@ -33,8 +33,12 @@ which sidesteps the ACP packaging problem entirely.
 > how to help get it landed.
 
 > **Scope note.** This is a personal/experimental integration. It drives Google's own
-> CLI with your own credentials. Check that this matches your intended use of the
-> Antigravity terms before shipping it to others.
+> CLI with your own credentials. Google's own terms govern that use — including whether
+> it is permitted and whether the Antigravity binary may be redistributed. Those terms
+> are Google's to change and we do not interpret them here; read them at
+> <https://antigravity.google/terms> before relying on this. See
+> [`doc/gemini-acp-path.md` §4.0](doc/gemini-acp-path.md) for the licensing and
+> distribution facts we can state.
 
 ## Requirements
 

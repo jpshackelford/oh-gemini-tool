@@ -152,9 +152,46 @@ registry by Google LLC:
 
 - Registry entry: [`agentclientprotocol/registry` → `antigravity-acp`](https://github.com/agentclientprotocol/registry/tree/main/antigravity-acp)
 - Version verified: **1.4.1**
-- License: proprietary (`https://antigravity.google/terms`)
+- License: **proprietary, no source available** — see §4.0
 - Distribution: prebuilt binaries for `darwin-aarch64`, `darwin-x86_64`, `linux-x86_64`,
   `linux-aarch64`, `windows-x86_64`, `windows-aarch64`
+
+### 4.0 No source, and a proprietary license
+
+**There is no source release.** The registry entry declares `"license": "proprietary"`
+and points at `https://antigravity.google/terms`. The artifact itself confirms it — it
+ships as two stripped native executables and nothing else:
+
+| File | Size | Type |
+|---|---|---|
+| `agy_acp_server.par` | 279 MiB | Mach-O 64-bit executable (arm64) |
+| `localharness_external` | 115 MiB | Mach-O 64-bit executable (arm64) |
+
+`.par` is a filename only — despite the extension it is not a Python archive or a PEX;
+it is a raw Mach-O binary. There is no `LICENSE`, `NOTICE`, or source tree inside the
+zip, and no public repository exists. (The Apache-2.0 and MIT strings visible in `strings`
+output are from vendored third-party libraries, not from the server itself.)
+
+This is a practical difference from the other ACP providers: `gemini-cli`,
+`claude-code`, `codex` and the rest are npm packages whose source is on GitHub. A
+proprietary binary can be *consumed*, but it cannot be read, patched, vendored, or
+audited.
+
+It is also a difference that matters if `antigravity-acp` ever became a *first-class
+built-in provider*: the agent-server image would download Google's proprietary binary
+and ship it inside an OpenHands image. That is redistribution of a proprietary artifact
+rather than an npm install, which raises a licensing question this document does not
+answer. It is a further reason the provider is not simply a registry entry, and it
+belongs in the discussion on #4624.
+
+Two related gaps, stated without interpretation:
+
+- The registry's `website` field points at
+  `https://antigravity.google/docs/ide/extensions`, which documents IDE extensions and
+  authentication but not the ACP server, its intended clients, or its supported use.
+- The governing terms are at `https://antigravity.google/terms` and are Google's to
+  change. **They are not reproduced or interpreted here.** Read them yourself, at the
+  version in force when you read them, and decide whether your intended use is permitted.
 
 ### 4.1 It supports the subscription login
 
@@ -318,10 +355,11 @@ Pulling the rest together, in rough order of tractability:
 | 1 | Add Antigravity as a first-class ACP provider | Open, **reopened and rescoped**, `ready-for-dev`, unscheduled | [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624) |
 | 2 | Registry cannot express non-npm (binary) providers | **Closed as watch item** 2026-09-04; not in SDK 1.49.6 | [#4823](https://github.com/OpenHands/software-agent-sdk/issues/4823) |
 | 3 | Artifact size / image variant | Cited as a gating reason; figures appear stale | see §5.2 |
-| 4 | Auth selection cannot tell `gemini-cli` and `antigravity-acp` apart | **Not filed** — see §5.4 | — |
-| 5 | `gemini-cli` auth precedence + stale pin | Fix written, **closed unmerged** 2026-09-15; pin still undone | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629), [PR #4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) |
+| 4 | Proprietary binary — no source; redistribution question for an image | **Not filed** — see §4.0 | — |
+| 5 | Auth selection cannot tell `gemini-cli` and `antigravity-acp` apart | **Not filed** — see §5.4 | — |
+| 6 | `gemini-cli` auth precedence + stale pin | Fix written, **closed unmerged** 2026-09-15; pin still undone | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629), [PR #4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) |
 
-Items 1–4 gate the Antigravity path. Item 5 affects `gemini-cli` — and, as §5.4 explains,
+Items 1–5 gate the Antigravity path. Item 6 affects `gemini-cli` — and, as §5.4 explains,
 fixing it the obvious way would work *against* item 1's goal.
 
 ### 5.1 Issue #4624 — the Antigravity provider
@@ -471,3 +509,6 @@ Everything version-sensitive in this document was checked on the date shown.
 | 2026-10-19 | Dockerfile `acp-providers` stage on main | installs via `npm install --global`; no branch for platform binaries |
 | 2026-10-19 | `install_method` on main | absent — #4823's proposal never landed |
 | 2026-10-19 | enterprise#235 gate notice | "npm or otherwise thin install path, or an artifact small enough to fetch on demand" |
+| 2026-10-19 | Artifact contents | two Mach-O binaries; no source, `LICENSE`, or `NOTICE` |
+| 2026-10-19 | Registry license field | `proprietary` |
+| 2026-10-19 | Antigravity terms URL | `https://antigravity.google/terms` (not reproduced or interpreted here) |
