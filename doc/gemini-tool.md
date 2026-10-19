@@ -141,11 +141,14 @@ and the specific issues and PRs to support.
 
 ## 5. Terms and Eligibility
 
-This tool drives Google's own CLI with the user's own credentials, which is closer to
-intended Antigravity use than scraping the API. The boundary Google drew is that API and
-external-application usage is billed separately from subscription quota; programmatic
-automation of a local CLI sits in a grey zone. Check it against your intended use before
-shipping it to others.
+This tool drives Google's own CLI with the user's own credentials, on the machine where
+the user is already signed in. It does not call a model API directly and does not
+provision anything.
+
+Google's terms govern that use, and they are Google's to write and to change. This
+document does not reproduce or interpret them. Read the terms that apply to your account
+and your intended use — for Google, <https://antigravity.google/terms> — and decide
+whether your use is permitted before shipping this to others.
 
 ## 6. Testing Strategy
 

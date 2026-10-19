@@ -11,33 +11,34 @@ heavy lifting — in the conversation workspace, on your Antigravity subscriptio
 
 ## Why this exists
 
-OpenHands supports Gemini through two paths today, and neither fits a personal
-subscription:
+OpenHands supports Gemini through ACP today, but not for personal subscriptions:
 
-- **`gemini-cli` over ACP** works, but Google retired consumer-tier OAuth on
-  2026-06-18, so an individual account must use a billed API key.
-- **Antigravity as a built-in ACP provider** is deferred upstream. The first-party ACP
-  server is a large download with no npm fallback, which does not fit the ACP
-  startup budget.
+- **`gemini-cli` over ACP** works for Enterprise and for billed API keys. Google retired
+  consumer-tier OAuth on 2026-06-18, so a personal subscription cannot use it.
+- **Antigravity as a built-in ACP provider** is deferred upstream. Google ships a
+  first-party ACP server that works on a personal subscription, but it is distributed as
+  a platform binary rather than an npm package, which the provider install mechanism does
+  not yet support.
 
 `agy` itself, however, is already installed, already authenticated, and runs on the
-subscription. It just has no `--acp` mode. This tool drives it headlessly instead,
-which sidesteps the ACP packaging problem entirely.
+subscription. It just has no `--acp` mode. This tool drives it headlessly instead.
 
 > **This tool is a workaround, not the ideal integration.** ACP is the better answer —
 > it keeps OpenHands as the primary agent and exposes streaming, typed tool calls, and
-> permission gating. **A first-party Antigravity ACP server exists and already works
-> with the SDK's `acp_command` escape hatch on a personal subscription.** See
-> **[`doc/gemini-acp-path.md`](doc/gemini-acp-path.md)** for what OpenHands supports
-> today, the bugs blocking the built-in provider (with issue/PR links and dates), and
-> how to help get it landed.
+> permission gating. **A first-party Antigravity ACP server exists and already works with
+> the SDK's `acp_command` escape hatch on a personal subscription.**
+>
+> See **[`doc/gemini-acp-path.md`](doc/gemini-acp-path.md)** — it covers what ACP is, how
+> OpenHands supports other vendors' harnesses today, how to use Gemini with an Enterprise
+> account, a step-by-step tutorial for a personal subscription, why first-class support is
+> not there yet, and a factual list of what the integration does and does not do.
 
 > **Scope note.** This is a personal/experimental integration. It drives Google's own
 > CLI with your own credentials. Google's own terms govern that use — including whether
 > it is permitted and whether the Antigravity binary may be redistributed. Those terms
 > are Google's to change and we do not interpret them here; read them at
 > <https://antigravity.google/terms> before relying on this. See
-> [`doc/gemini-acp-path.md` §4.0](doc/gemini-acp-path.md) for the licensing and
+> [`doc/gemini-acp-path.md` §5.5](doc/gemini-acp-path.md) for the licensing and
 > distribution facts we can state.
 
 ## Requirements
