@@ -183,6 +183,17 @@ unzip agy-acp-server-1.4.1-darwin-arm64.zip -d agy-acp
 chmod +x agy-acp/agy_acp_server.par
 ```
 
+**The archive is self-contained — you do not need Antigravity installed.** It unpacks to
+two files, and both are required: `agy_acp_server.par` (the server) and
+`localharness_external` (the harness, which the server resolves as a sibling and will not
+start without). Verified 2026-10-19: with `agy` absent from `PATH` and an empty `HOME`,
+the server still completes `initialize` and advertises all four auth methods. The
+harness binary contains the agent logic itself — the `agy-customizations` skills and the
+model client — rather than shelling out to `agy`.
+
+Note the size varies a lot by platform, and the figure that matters for a container is
+linux-x86_64: see §5.3.
+
 #### Step 2 — Authenticate
 
 On first use with no credentials present, the server advertises `oauth-personal`
@@ -285,7 +296,7 @@ Summary, in rough order of tractability:
 |---|---|---|---|
 | 1 | Add Antigravity as a first-class ACP provider | Open, `ready-for-dev`, unscheduled | [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624) |
 | 2 | Registry cannot express non-npm (binary) providers | **Closed as watch item** 2026-09-04; not in SDK 1.49.6 | [#4823](https://github.com/OpenHands/software-agent-sdk/issues/4823) |
-| 3 | Artifact size / image variant | Cited as a gating reason; figures appear stale | see §5.3 |
+| 3 | Artifact size / image variant | Measured all platforms; linux-x86_64 is 320.6 MiB down / 1012.8 MiB unpacked | see §5.3 |
 | 4 | Proprietary binary — no source; distribution question for an image | **Not filed** — see §5.5 | — |
 | 5 | Auth selection cannot tell `gemini-cli` and `antigravity-acp` apart | **Not filed** — see §5.4 | — |
 | 6 | `gemini-cli` auth precedence + stale pin | Fix written, **closed unmerged** 2026-09-15; pin still undone | [#4629](https://github.com/OpenHands/software-agent-sdk/issues/4629), [PR #4646](https://github.com/OpenHands/software-agent-sdk/pull/4646) |
@@ -323,16 +334,40 @@ escape hatch bypasses all of it — see §4.5.
 
 ### 5.3 Artifact size
 
-The figures cited in #4624 are substantially larger than what v1.4.1 actually ships:
+This section previously reported only the darwin-arm64 figure (107.5 MiB download,
+~394 MiB unpacked) and concluded the cited numbers were stale. **That conclusion was
+wrong, and the single-platform framing was misleading.** Measured across all six targets
+at v1.4.1:
 
-| | Cited in #4624 | Measured, v1.4.1 darwin-arm64 |
+| Target | Download (zip) | Unpacked |
 |---|---|---|
-| Download (zip) | 650.4 MiB | **107.5 MiB** |
-| Unpacked | ~1.9 GiB | **~394 MiB** |
+| `darwin-arm64` | 107.5 MiB | 382.7 MiB |
+| `darwin-x86_64` | 112.9 MiB | — |
+| **`linux-x86_64`** | **320.6 MiB** | **1012.8 MiB** |
+| `linux-arm64` | 307.0 MiB | — |
+| `windows-x86_64` | 123.6 MiB | — |
+| `windows-arm64` | 126.4 MiB | — |
 
-The download is roughly 6× smaller than the cited figure, and the unpacked tree about a
-fifth. The download is comfortably smaller than a browser or a CUDA runtime. Per-platform
-figures for other targets have not been measured — that is the cheapest way to move item 3.
+The platform that matters for a container image is **linux-x86_64**, and it is roughly
+**3× the darwin-arm64 figure**. Each archive contains two files, and both are required:
+the server resolves its harness as a sibling (`localharness_external`) and does not start
+without it.
+
+The figures cited in #4624 (650.4 MiB download, ~1.9 GiB unpacked, v1.1.1) are still
+larger than anything measured here — but they are not the order-of-magnitude error the
+darwin-only comparison suggested. For linux-x86_64 the real numbers are about half the
+cited download and about half the cited unpacked size. The cited figures are also
+unverifiable now: the v1.1.1 URL returns 404, so the older artifact is gone.
+
+Whether ~320 MiB (or ~1013 MiB unpacked) is acceptable is the actual decision. It is
+roughly the size of a browser or a CUDA runtime, and #4624's gate language contemplates
+"an artifact small enough to fetch on demand" — so the measurement speaks to that arm of
+the disjunction rather than settling it. A contributing factor: `localharness_external`
+is 114.7 MiB stripped, but the equivalent installed `agy` binary is 177.9 MiB. If the
+distributed harness is built without stripping, most of the unpacked size may be debug
+symbols and symbol tables — which is consistent with #4624's own observation that a
+`.par_data` section holds embedded Python alongside 283 MiB of debug symbols. Verifying
+that, and whether a stripped build would shrink the artifact, is the cheapest next step.
 
 ### 5.4 Two servers, one auth-method id, opposite meanings
 
@@ -462,15 +497,17 @@ and may help you interpret the agreement that applies to you.
 
 In rough order of tractability:
 
-1. **Measure the other platforms.** §5.3 has one platform measured. Per-platform numbers
-   directly address one arm of the distribution gate in §5.1.
+1. **Check whether a stripped harness shrinks the artifact.** §5.3 found the distributed
+   harness is larger than the installed `agy` and the unpacked size is dominated by what
+   looks like debug symbols. If a stripped build is materially smaller, that changes the
+   size argument in #4624.
 2. **Raise the auth-method collision (§5.4) in #4624** before a provider lands. It is not
    filed anywhere, and it is the kind of thing that is cheap now and expensive later.
 3. **Comment on [#4624](https://github.com/OpenHands/software-agent-sdk/issues/4624)** if
    you want first-class support — it is `ready-for-dev` and unscheduled, so demand is the
    signal.
-4. **Note the licensing question (§5.5)** if you are weighing whether the binary can ship
-   inside an image.
+4. **Note the distribution question (§5.5)** if you are weighing whether the binary can
+   ship inside an image.
 
 ---
 
@@ -493,3 +530,8 @@ Everything version-sensitive in this document was checked on the date shown.
 | 2026-10-19 | Artifact contents | two Mach-O binaries; no source, `LICENSE`, or `NOTICE` |
 | 2026-10-19 | Registry license field | `proprietary` |
 | 2026-10-19 | Antigravity terms URL | `https://antigravity.google/terms` (not reproduced or interpreted here) |
+| 2026-10-19 | All six platform archive sizes | darwin-arm64 107.5 MiB … linux-x86_64 320.6 MiB (largest); measured via `content-length` |
+| 2026-10-19 | linux-x86_64 unpacked | 1012.8 MiB across two files |
+| 2026-10-19 | v1.1.1 archive URL | 404 — the version #4624 cites is no longer downloadable |
+| 2026-10-19 | Standalone operation | boots and answers `initialize` with `agy` absent from `PATH` and empty `HOME` |
+| 2026-10-19 | Harness binary | `localharness_external`, 114.7 MiB stripped; installed `agy` is 177.9 MiB |
