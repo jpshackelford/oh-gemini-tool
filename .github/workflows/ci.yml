@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    # Skip CI on Release Please PRs (only version bumps, already tested)
+    if: |
+      github.event_name == 'push' ||
+      (github.event.pull_request.user.login != 'github-actions[bot]' ||
+       !startsWith(github.event.pull_request.head.ref, 'release-please--'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: uv pip install -e ".[dev,openhands]"
+
+      - name: Run ruff linter
+        run: uv run ruff check src tests
+
+      - name: Run ruff formatter check
+        run: uv run ruff format --check src tests
+
+  test:
+    name: Test
+    # Skip CI on Release Please PRs (only version bumps, already tested)
+    if: |
+      github.event_name == 'push' ||
+      (github.event.pull_request.user.login != 'github-actions[bot]' ||
+       !startsWith(github.event.pull_request.head.ref, 'release-please--'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: uv pip install -e ".[dev,openhands]"
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests \
+            --cov=oh_gemini_tool \
+            --cov-report=term-missing \
+            --cov-report=html:htmlcov \
+            --cov-report=xml \
+            --cov-fail-under=80 \
+            -v
+
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 14
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Coverage Summary
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          uv run coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
+
+  all-checks:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          # Accept both "success" and "skipped" (Release Please PRs skip CI)
+          lint_ok=$([[ "${{ needs.lint.result }}" == "success" || "${{ needs.lint.result }}" == "skipped" ]] && echo "true" || echo "false")
+          test_ok=$([[ "${{ needs.test.result }}" == "success" || "${{ needs.test.result }}" == "skipped" ]] && echo "true" || echo "false")
+          
+          if [[ "$lint_ok" == "false" ]] || [[ "$test_ok" == "false" ]]; then
+            echo "One or more jobs failed"
+            echo "Lint: ${{ needs.lint.result }}"
+            echo "Test: ${{ needs.test.result }}"
+            exit 1
+          fi
+          echo "All checks passed! ✅"

@@ -1,0 +1,41 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          release-type: python
+          package-name: oh-gemini-tool
+          
+      # Output release information for debugging
+      - name: Release info
+        if: steps.release.outputs.release_created
+        run: |
+          echo "Release created: ${{ steps.release.outputs.release_created }}"
+          echo "Tag name: ${{ steps.release.outputs.tag_name }}"
+          echo "Version: ${{ steps.release.outputs.version }}"
+          echo ""
+          echo "Triggering release.yml workflow to build and publish to PyPI..."
+      
+      # Trigger the release workflow to build and publish
+      # (GitHub Actions doesn't auto-trigger release workflows when created by bots)
+      - name: Trigger release workflow
+        if: steps.release.outputs.release_created
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ steps.release.outputs.tag_name }}
